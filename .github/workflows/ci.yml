@@ -1,0 +1,176 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - name: Install ruff
+        run: uv tool install ruff
+      - name: Lint
+        run: uv tool run ruff check .
+      - name: Format check
+        run: uv tool run ruff format --check .
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - name: Set up Python
+        run: uv python install 3.11
+      - name: Install test dependencies
+        run: |
+          uv pip install --system \
+            tiktoken openai pytest pytest-cov httpx \
+            structlog pydantic pydantic-settings
+      - name: Run unit tests
+        env:
+          OPENAI_API_KEY: sk-test-fake-key
+        run: |
+          pytest tests/unit/ -m unit -v \
+            --cov=src \
+            --cov-report=term-missing \
+            --cov-report=html:htmlcov \
+            --cov-fail-under=60
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: htmlcov/
+
+  build:
+    name: Build ${{ matrix.service.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - name: upload-service
+            dockerfile: src/upload_service/Dockerfile
+          - name: embedding-worker
+            dockerfile: src/embedding_worker/Dockerfile
+          - name: rag-api
+            dockerfile: src/rag_api/Dockerfile
+          - name: gradio-ui
+            dockerfile: src/gradio_ui/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build ${{ matrix.service.name }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.service.dockerfile }}
+          push: false
+          tags: rag-pipeline-${{ matrix.service.name }}:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [build]
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install test dependencies
+        run: |
+          uv pip install --system \
+            pytest pytest-cov httpx structlog \
+            pydantic pydantic-settings
+
+      - name: Create .env
+        run: |
+          cat > .env << 'ENVEOF'
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          POSTGRES_USER=rag
+          POSTGRES_PASSWORD=ragpass
+          POSTGRES_DB=rag_pipeline
+          LOG_LEVEL=INFO
+          ENVEOF
+
+      - name: Start infrastructure
+        run: |
+          docker compose -p rag-pipeline up -d zookeeper kafka postgres chromadb
+
+      - name: Wait for Kafka
+        run: |
+          timeout 120 bash -c '
+            until docker compose -p rag-pipeline exec -T kafka \
+              kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1; do
+              echo "  Kafka not ready..."; sleep 5
+            done
+          '
+          echo "✓ Kafka ready"
+
+      - name: Wait for Postgres
+        run: |
+          timeout 60 bash -c '
+            until docker compose -p rag-pipeline exec -T postgres \
+              pg_isready -U rag -d rag_pipeline > /dev/null 2>&1; do
+              echo "  Postgres not ready..."; sleep 3
+            done
+          '
+          echo "✓ Postgres ready"
+
+      - name: Wait for ChromaDB
+        run: |
+          timeout 60 bash -c '
+            until curl -sf http://localhost:8010/api/v1/heartbeat > /dev/null 2>&1; do
+              echo "  ChromaDB not ready..."; sleep 3
+            done
+          '
+          echo "✓ ChromaDB ready"
+
+      - name: Start application services
+        run: |
+          docker compose -p rag-pipeline up -d upload-service embedding-worker rag-api
+
+      - name: Wait for upload-service
+        run: |
+          timeout 60 bash -c '
+            until curl -sf http://localhost:8001/health > /dev/null 2>&1; do
+              echo "  upload-service not ready..."; sleep 3
+            done
+          '
+          echo "✓ upload-service ready"
+
+      - name: Wait for rag-api
+        run: |
+          timeout 60 bash -c '
+            until curl -sf http://localhost:8000/health > /dev/null 2>&1; do
+              echo "  rag-api not ready..."; sleep 3
+            done
+          '
+          echo "✓ rag-api ready"
+
+      - name: Run integration tests
+        run: |
+          pytest tests/integration/ -m integration -v --tb=short
+
+      - name: Dump logs on failure
+        if: failure()
+        run: |
+          docker compose -p rag-pipeline logs upload-service
+          docker compose -p rag-pipeline logs embedding-worker
+          docker compose -p rag-pipeline logs rag-api
+
+      - name: Tear down
+        if: always()
+        run: docker compose -p rag-pipeline down -v
