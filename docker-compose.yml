@@ -40,7 +40,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-rag}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ragpass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-rag_pipeline}
     ports:
       - "5435:5432"
@@ -76,7 +76,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_TOPIC_DOCUMENTS: ${KAFKA_TOPIC_DOCUMENTS:-documents}
       POSTGRES_USER: ${POSTGRES_USER:-rag}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ragpass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-rag_pipeline}
       POSTGRES_HOST: postgres
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -98,14 +98,14 @@ services:
       context: .
       dockerfile: src/embedding_worker/Dockerfile
     environment:
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY is required}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_TOPIC_DOCUMENTS: ${KAFKA_TOPIC_DOCUMENTS:-documents}
       KAFKA_CONSUMER_GROUP: ${KAFKA_CONSUMER_GROUP:-embedding-workers}
       CHROMA_HOST: chromadb
       CHROMA_PORT: 8000
       POSTGRES_USER: ${POSTGRES_USER:-rag}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ragpass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-rag_pipeline}
       POSTGRES_HOST: postgres
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
@@ -125,11 +125,11 @@ services:
     ports:
       - "8000:8000"
     environment:
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY is required}
       CHROMA_HOST: chromadb
       CHROMA_PORT: 8000
       POSTGRES_USER: ${POSTGRES_USER:-rag}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ragpass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-rag_pipeline}
       POSTGRES_HOST: postgres
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
