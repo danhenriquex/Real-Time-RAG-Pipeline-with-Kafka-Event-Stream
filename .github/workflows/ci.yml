@@ -30,14 +30,19 @@ jobs:
         run: uv python install 3.11
       - name: Install test dependencies
         run: |
-          uv pip install --system \
+          uv venv .venv
+          uv pip install --python .venv/bin/python \
             tiktoken openai pytest pytest-cov httpx \
-            structlog pydantic pydantic-settings
+            structlog pydantic pydantic-settings \
+            chromadb psycopg2-binary confluent-kafka \
+            pypdf pytesseract pdf2image \
+            fastapi uvicorn tenacity
       - name: Run unit tests
         env:
           OPENAI_API_KEY: sk-test-fake-key
+          VIRTUAL_ENV: .venv
         run: |
-          pytest tests/unit/ -m unit -v \
+          .venv/bin/pytest tests/unit/ -m unit -v \
             --cov=src \
             --cov-report=term-missing \
             --cov-report=html:htmlcov \
@@ -91,7 +96,8 @@ jobs:
 
       - name: Install test dependencies
         run: |
-          uv pip install --system \
+          uv venv .venv
+          uv pip install --python .venv/bin/python \
             pytest pytest-cov httpx structlog \
             pydantic pydantic-settings
 
@@ -132,7 +138,7 @@ jobs:
       - name: Wait for ChromaDB
         run: |
           timeout 60 bash -c '
-            until curl -sf http://localhost:8010/api/v1/heartbeat > /dev/null 2>&1; do
+            until curl -sf http://localhost:8010/api/v2/heartbeat > /dev/null 2>&1; do
               echo "  ChromaDB not ready..."; sleep 3
             done
           '
@@ -162,7 +168,7 @@ jobs:
 
       - name: Run integration tests
         run: |
-          pytest tests/integration/ -m integration -v --tb=short
+          .venv/bin/pytest tests/integration/ -m integration -v --tb=short
 
       - name: Dump logs on failure
         if: failure()

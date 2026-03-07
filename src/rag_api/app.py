@@ -57,19 +57,27 @@ DATABASE_URL = (
 # ── Clients ───────────────────────────────────────────────────────────────────
 
 client = OpenAI(api_key=OPENAI_KEY)
-chroma = chromadb.HttpClient(
-    host=CHROMA_HOST,
-    port=CHROMA_PORT,
-    tenant="default_tenant",
-    database="default_database",
-)
+# Lazy initialization — not connected until first use
+_chroma = None
 collection = None
+
+
+def get_chroma_client():
+    global _chroma
+    if _chroma is None:
+        _chroma = chromadb.HttpClient(
+            host=CHROMA_HOST,
+            port=CHROMA_PORT,
+            tenant="default_tenant",
+            database="default_database",
+        )
+    return _chroma
 
 
 def get_collection():
     global collection
     if collection is None:
-        collection = chroma.get_or_create_collection(
+        collection = get_chroma_client().get_or_create_collection(
             name=COLLECTION_NAME,
             metadata={"hnsw:space": "cosine"},
         )
@@ -270,6 +278,7 @@ def query(req: QueryRequest):
 @app.get("/health")
 def health():
     try:
+        get_chroma_client()
         get_collection().count()
         chroma_ok = True
     except Exception:

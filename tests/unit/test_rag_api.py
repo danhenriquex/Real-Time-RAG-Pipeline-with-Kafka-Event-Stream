@@ -60,7 +60,11 @@ class TestVectorSearch:
         from rag_api.app import vector_search
 
         mock_col = MagicMock()
-        mock_col.query.return_value = {"documents": [[]], "metadatas": [[]], "distances": [[]]}
+        mock_col.query.return_value = {
+            "documents": [[]],
+            "metadatas": [[]],
+            "distances": [[]],
+        }
         mock_get_col.return_value = mock_col
 
         vector_search([0.0] * 1536, k=7)
@@ -201,8 +205,11 @@ class TestEmbedQuery:
 class TestHealthEndpoint:
     @patch("rag_api.app.get_db")
     @patch("rag_api.app.get_collection")
-    def test_health_ok_when_all_services_up(self, mock_get_col, mock_get_db):
+    @patch("rag_api.app.get_chroma_client")
+    def test_health_ok_when_all_services_up(self, mock_get_chroma, mock_get_col, mock_get_db):
         from rag_api.app import health
+
+        mock_get_chroma.return_value = MagicMock()
 
         mock_col = MagicMock()
         mock_col.count.return_value = 0
@@ -218,12 +225,12 @@ class TestHealthEndpoint:
 
     @patch("rag_api.app.get_db")
     @patch("rag_api.app.get_collection")
-    def test_health_degraded_when_chroma_down(self, mock_get_col, mock_get_db):
+    @patch("rag_api.app.get_chroma_client")
+    def test_health_degraded_when_chroma_down(self, mock_get_chroma, mock_get_col, mock_get_db):
         from rag_api.app import health
 
-        mock_col = MagicMock()
-        mock_col.count.side_effect = Exception("ChromaDB down")
-        mock_get_col.return_value = mock_col
+        mock_get_chroma.side_effect = Exception("ChromaDB down")
+        mock_get_col.return_value = MagicMock()
 
         mock_conn = MagicMock()
         mock_get_db.return_value = mock_conn
@@ -235,8 +242,11 @@ class TestHealthEndpoint:
 
     @patch("rag_api.app.get_db")
     @patch("rag_api.app.get_collection")
-    def test_health_degraded_when_db_down(self, mock_get_col, mock_get_db):
+    @patch("rag_api.app.get_chroma_client")
+    def test_health_degraded_when_db_down(self, mock_get_chroma, mock_get_col, mock_get_db):
         from rag_api.app import health
+
+        mock_get_chroma.return_value = MagicMock()
 
         mock_col = MagicMock()
         mock_col.count.return_value = 0
