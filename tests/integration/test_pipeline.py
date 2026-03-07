@@ -92,7 +92,7 @@ class TestUploadService:
         assert resp.json()["id"] == doc_id
 
     def test_get_nonexistent_document_404(self):
-        resp = httpx.get(f"{UPLOAD_URL}/documents/nonexistent-id")
+        resp = httpx.get(f"{UPLOAD_URL}/documents/00000000-0000-0000-0000-000000000000")
         assert resp.status_code == 404
 
 
@@ -107,7 +107,10 @@ class TestBatchUpload:
         files = [
             ("files", ("batch1.txt", b"Document about neural networks.", "text/plain")),
             ("files", ("batch2.txt", b"Document about transformers.", "text/plain")),
-            ("files", ("batch3.txt", b"Document about reinforcement learning.", "text/plain")),
+            (
+                "files",
+                ("batch3.txt", b"Document about reinforcement learning.", "text/plain"),
+            ),
         ]
         resp = httpx.post(f"{UPLOAD_URL}/upload/batch", files=files, timeout=30)
         assert resp.status_code == 202
@@ -190,7 +193,7 @@ class TestDeleteAndReingest:
         assert resp.status_code == 404
 
     def test_delete_nonexistent_returns_404(self):
-        resp = httpx.delete(f"{UPLOAD_URL}/documents/does-not-exist")
+        resp = httpx.delete(f"{UPLOAD_URL}/documents/00000000-0000-0000-0000-000000000001")
         assert resp.status_code == 404
 
     def test_reingest_resets_status(self):
@@ -200,7 +203,7 @@ class TestDeleteAndReingest:
         assert resp.json()["status"] == "pending"
 
     def test_reingest_nonexistent_returns_404(self):
-        resp = httpx.post(f"{UPLOAD_URL}/documents/does-not-exist/reingest")
+        resp = httpx.post(f"{UPLOAD_URL}/documents/00000000-0000-0000-0000-000000000001/reingest")
         assert resp.status_code == 404
 
 
@@ -302,7 +305,11 @@ class TestFullPipeline:
         for token in ["ALPHA42", "BETA42", "GAMMA42"]:
             resp = httpx.post(
                 f"{RAG_URL}/query",
-                json={"query": f"What is {token}?", "search_mode": "hybrid", "top_k": 5},
+                json={
+                    "query": f"What is {token}?",
+                    "search_mode": "hybrid",
+                    "top_k": 5,
+                },
                 timeout=30,
             )
             assert resp.json()["num_chunks"] > 0, f"{token} not found after batch upload"
