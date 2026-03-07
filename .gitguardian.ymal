@@ -1,0 +1,10 @@
+# GitGuardian ignore file
+# These are default development passwords, not real secrets.
+ignore-paths:
+  - tests/conftest.py
+
+ignored-matches:
+  - name: "Default dev password in docker-compose"
+    match: "ragpass"
+  - name: "Default dev password in conftest"
+    match: "ragpass"
