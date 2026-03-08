@@ -1,4 +1,4 @@
-# 🔍 Real-Time RAG Pipeline
+# Real-Time RAG Pipeline
 
 An event-driven Retrieval-Augmented Generation (RAG) system built with Kafka, ChromaDB, PostgreSQL, and OpenAI. Upload documents (TXT, Markdown, PDF), have them automatically chunked and embedded in real time, then query them with an AI agent that returns cited answers.
 
